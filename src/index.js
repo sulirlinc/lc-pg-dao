@@ -3,10 +3,13 @@ const Pool = require('pg-pool')
 const pg = (async (args = {}) => {
   try {
     const { config } = args
-    return { client: await new Pool(config).connect(), pg }
+    const client = await new Pool(config).connect();
+    return { client, pg }
   } catch (error) {
     throw {
       code: "database.connect.error",
+      message: '数据库链接失败。',
+      info: { args },
       error
     }
   }
@@ -17,8 +20,9 @@ const doCheckNull = ({ value, codeName, info }) => {
     return value
   } else if (codeName) {
     throw {
-      info: [ info ],
-      code: codeName
+      info: { value, codeName, info },
+      code: codeName,
+      error: new Error("业务无效。")
     }
   }
 }
@@ -30,7 +34,11 @@ const checkPrimaryKeys = (primaryKeys) => {
     break
   }
   if (!isTrue) {
-    throw { code: "not.found.primary.keys" }
+    throw {
+      info: { primaryKeys },
+      code: "not.found.primary.keys",
+      error: new Error("未找到主键。")
+    }
   }
   return primaryKeys
 }
@@ -79,7 +87,11 @@ const buildFields = ({ fields, primaryKey }) => {
     str = `${ str },`
   })
   if (L.isNullOrEmpty(str)) {
-    throw `fields is null? ${ JSON.stringify(fields) }`;
+    throw {
+      info: { fields, primaryKey },
+      code: "build.fields.data.is.null",
+      error: new Error(`fields is null? ${ JSON.stringify(fields) }`)
+    }
   }
   return `${ str }`
 }
@@ -93,8 +105,9 @@ const dao = (({ c, config }) => {
       tableName = L.toDBField(tableName)
       primaryKey = L.toDBField(primaryKey)
       const client = await this.client()
+      let sql = ``
       try {
-        let sql = `create table if not exists ${ tableName } ( ${ isAutoCreateId
+        sql = `create table if not exists ${ tableName } ( ${ isAutoCreateId
             ? ` id bigserial not null ${ L.isNullOrEmpty(primaryKey)
                 ? `constraint ${ tableName }_pk_id primary key` : '' },` : '' }`
         let column = buildFields({ fields, primaryKey })
@@ -111,7 +124,9 @@ const dao = (({ c, config }) => {
         return (await client.query({ sql }));
       } catch (error) {
         throw {
+          info: { fields, tableName, primaryKey, uniqueKeys, isAutoCreateId, isAutoCreateOperatorId, createUpdateAt },
           code: "create.table.invalid.configuration",
+          message: `创建表出错${ sql }`,
           error
         }
       }
@@ -182,7 +197,9 @@ const dao = (({ c, config }) => {
       const client = await this.client()
       if (!await this.count({ client, tableName, ...getByWhere(primaryKeys) })) {
         throw {
-          code: "data.not.found"
+          code: "data.update.where.clause.not.found",
+          info: { tableName, primaryKeys, data },
+          error: new Error("更新数据的条件不存在。")
         }
       }
       const sets = getBySet(data)
@@ -201,7 +218,9 @@ const dao = (({ c, config }) => {
       const client = await this.client()
       if (!unCheck && await this.count({ client, tableName, ...getByWhere(primaryKeys) }) > 0) {
         throw {
-          code: "data.is.exists"
+          code: "data.is.exists",
+          info: { tableName, primaryKeys, data, unCheck },
+          error: new Error("数据已存在")
         }
       }
       const { keys, queryConfig, argsIndex } = getByData(data)
@@ -223,7 +242,7 @@ const dao = (({ c, config }) => {
 
     async client() {
       datasource = datasource || (await pg({ config }))
-      client = client || (await datasource.client)
+      client = client || datasource.client
       if (!client.myOverviewQuery) {
         client.myOverviewQuery = client.query
         client.query = async ({ sql, queryConfig }) => {
@@ -240,8 +259,9 @@ const dao = (({ c, config }) => {
             }
           } catch (error) {
             throw {
-              info: [ `sql:${ sql };`, `queryConfig:${ JSON.stringify(queryConfig) }` ],
-              code: "execute.sql.error"
+              info: { sql, queryConfig },
+              code: "execute.sql.error",
+              error
             }
           }
         }
