@@ -7,7 +7,7 @@ const pg = (async (args = {}) => {
     return { client, pg }
   } catch (error) {
     throw {
-      code: "database.connect.error",
+      code: "lc.pg.dao.database.connect.error",
       message: '数据库链接失败。',
       info: { args },
       error
@@ -36,7 +36,7 @@ const checkPrimaryKeys = (primaryKeys) => {
   if (!isTrue) {
     throw {
       info: { primaryKeys },
-      code: "not.found.primary.keys",
+      code: "lc.pg.dao.not.found.primary.keys",
       error: new Error("未找到主键。")
     }
   }
@@ -89,7 +89,7 @@ const buildFields = ({ fields, primaryKey }) => {
   if (L.isNullOrEmpty(str)) {
     throw {
       info: { fields, primaryKey },
-      code: "build.fields.data.is.null",
+      code: "lc.pg.dao.build.fields.data.is.null",
       error: new Error(`fields is null? ${ JSON.stringify(fields) }`)
     }
   }
@@ -100,8 +100,9 @@ const dao = (({ c, config }) => {
   let client = c
   let datasource = null
   return {
+    config,
     dao,
-    async create({ fields = [], tableName, primaryKey, uniqueKeys = [], isAutoCreateId, isAutoCreateOperatorId, createUpdateAt }) {
+    async createTable({ fields = [], tableName, primaryKey, uniqueKeys = [], isAutoCreateId, isAutoCreateOperatorId, createUpdateAt }) {
       tableName = L.toDBField(tableName)
       primaryKey = L.toDBField(primaryKey)
       const client = await this.client()
@@ -125,7 +126,7 @@ const dao = (({ c, config }) => {
       } catch (error) {
         throw {
           info: { fields, tableName, primaryKey, uniqueKeys, isAutoCreateId, isAutoCreateOperatorId, createUpdateAt },
-          code: "create.table.invalid.configuration",
+          code: "lc.pg.dao.create.table.invalid.configuration",
           message: `创建表出错${ sql }`,
           error
         }
@@ -197,7 +198,7 @@ const dao = (({ c, config }) => {
       const client = await this.client()
       if (!await this.count({ client, tableName, ...getByWhere(primaryKeys) })) {
         throw {
-          code: "data.update.where.clause.not.found",
+          code: "lc.pg.dao.data.update.where.clause.not.found",
           info: { tableName, primaryKeys, data },
           error: new Error("更新数据的条件不存在。")
         }
@@ -218,7 +219,7 @@ const dao = (({ c, config }) => {
       const client = await this.client()
       if (!unCheck && await this.count({ client, tableName, ...getByWhere(primaryKeys) }) > 0) {
         throw {
-          code: "data.is.exists",
+          code: "lc.pg.dao.data.is.exists",
           info: { tableName, primaryKeys, data, unCheck },
           error: new Error("数据已存在")
         }
@@ -260,13 +261,17 @@ const dao = (({ c, config }) => {
           } catch (error) {
             throw {
               info: { sql, queryConfig },
-              code: "execute.sql.error",
+              code: "lc.pg.dao.execute.sql.error",
               error
             }
           }
         }
       }
       return client
+    },
+    async createDataBase({ name }) {
+      const client = await this.client()
+      return (await client.query({ sql: `create database ${ name }` }));
     }
   }
 })

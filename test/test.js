@@ -15,7 +15,6 @@ describe('pg数据库工具类', () => {
       done()
     }).catch(e => console.error(e));
   }).timeout(120000)
-
   it("2.创建表", (done) => {
     dao({
       config: {
@@ -25,7 +24,7 @@ describe('pg数据库工具类', () => {
         "port": "5432",
         "database": "test"
       }
-    }).create({
+    }).createTable({
       isAutoCreateId: true,
       tableName: 't_u_column',
       isAutoCreateOperatorId: true,
