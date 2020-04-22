@@ -238,7 +238,7 @@ const dao = (({ c, config }) => {
       const { where, queryConfig } = getByWhere(primaryKeys)
       return (await client.query({
         sql: `delete from ${ tableName } ${ where }`, queryConfig
-      }))
+      })).rowCount
     },
 
     async client() {
