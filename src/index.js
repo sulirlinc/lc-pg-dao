@@ -20,7 +20,7 @@ const doCheckNull = ({ value, codeName, info }) => {
     return value
   } else if (codeName) {
     throw {
-      info: { value, codeName, info },
+      info,
       code: codeName,
       error: new Error("业务无效。")
     }
@@ -178,7 +178,7 @@ const dao = (({ c, config }) => {
         sql, queryConfig
       }))
       const rows = object.rowCount > 0 ? object.rows : null;
-      return doCheckNull({ value: rows, codeName });
+      return doCheckNull({ value: rows, codeName, info: { tableName, data } });
     },
 
     async findByCode({ tableName, data, codeName }) {
@@ -189,7 +189,7 @@ const dao = (({ c, config }) => {
         sql, queryConfig
       }))
       const rows = object.rowCount > 0 ? object.rows : null;
-      return doCheckNull({ value: rows, codeName, info: JSON.stringify({ tableName, data }) });
+      return doCheckNull({ value: rows, codeName, info: { tableName, data } });
     },
 
     async update({ tableName, primaryKeys, data }) {
