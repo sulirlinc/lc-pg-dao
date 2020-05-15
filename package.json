@@ -1,6 +1,6 @@
 {
   "name": "lc-pg-dao",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "postgres操作工具类。",
   "author": "Linc",
   "main": "src/index.js",
@@ -8,6 +8,12 @@
     "type": "git",
     "url": "https://github.com/sulirlinc/lc-pg-dao"
   },
+  "keywords": [
+    "lc-js-common",
+    "winston-transport",
+    "pg",
+    "pg-pool"
+  ],
   "dependencies": {
     "lc-js-common": "^1.0.10",
     "winston-transport": "latest",

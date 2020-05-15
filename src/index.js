@@ -102,14 +102,14 @@ const dao = (({ c, config }) => {
   return {
     config,
     dao,
-    async createTable({ fields = [], tableName, primaryKey, uniqueKeys = [], isAutoCreateId, isAutoCreateOperatorId, createUpdateAt }) {
+    async createTable({ fields = [], tableName, primaryKey, uniqueKeys = [], isAutoCreateId, isAutoCreateOperatorId, createUpdateAt, idName }) {
       tableName = L.toDBField(tableName)
       primaryKey = L.toDBField(primaryKey)
       const client = await this.client()
       let sql = ``
       try {
         sql = `create table if not exists ${ tableName } ( ${ isAutoCreateId
-            ? ` id bigserial not null ${ L.isNullOrEmpty(primaryKey)
+            ? ` ${idName || 'id'} bigserial not null ${ L.isNullOrEmpty(primaryKey)
                 ? `constraint ${ tableName }_pk_id primary key` : '' },` : '' }`
         let column = buildFields({ fields, primaryKey })
         sql = `${ sql } ${ column } ${ isAutoCreateOperatorId
