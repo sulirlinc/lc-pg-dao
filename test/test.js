@@ -1,6 +1,5 @@
-const dao = require('../src')
 describe('pg数据库工具类', () => {
-  const dao = dao({
+  const dao = require('../src')({
     config: {
       "user": "postgres",
       "password": "123123",
@@ -9,6 +8,10 @@ describe('pg数据库工具类', () => {
       "database": "test"
     }
   })
+  dao.client().then(data => {
+    console.log("初始化完成。")
+    console.log(`data:${ JSON.stringify(data) }`)
+  }).catch(e => console.error(e));
   it("1.初始化", (done) => {
     const { client } = dao
     client().then(data => {
@@ -77,5 +80,17 @@ describe('pg数据库工具类', () => {
       console.error(e)
       done()
     })
+    // 返回条数
+    dao.count({
+      tableName: 't_config_url',
+      data: { code: 123 }
+    }).then((data) => {
+      console.log(data)
+      done()
+    }).catch(e => {
+      console.error(e)
+      done()
+    })
+    //根据Code 查询
   })
 })

@@ -61,13 +61,17 @@ const getBySet = (data) => {
   }
   return { values: values.substr(1), queryConfig }
 }
+
 const getByWhere = (data, initIndex) => {
   let where = "", queryConfig = [], index = initIndex || 0
   for (const key in data) {
     where += `and ${ L.toDBField(key) }=$${ (++index) } `
     queryConfig.push(data[key])
   }
-  return { where: where.length > 3 ? `where ${ where.substr(3) }` : '', queryConfig }
+  return {
+    where: where.length > 3 ? `where ${ where.substr(3) }` : '',
+    queryConfig
+  }
 }
 
 const putAdd = (where, index) => {
@@ -159,9 +163,13 @@ const dao = (({ c, config }) => {
       ).rows;
       return { rows, count: await this.count({ client, tableName, where, queryConfig }) };
     },
-
-    async count({  tableName, where, queryConfig }) {
-      const client = await this.client;
+    async count({ client, tableName, where, data, queryConfig }) {
+      client = client || await this.client();
+      if (data) {
+        const byWhere = getByWhere(data);
+        where = byWhere.where;
+        queryConfig = byWhere.queryConfig;
+      }
       tableName = L.toDBField(tableName)
       return parseInt(
           (await client.query({
