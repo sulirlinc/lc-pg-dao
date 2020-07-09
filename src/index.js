@@ -160,7 +160,8 @@ const dao = (({ c, config }) => {
       return { rows, count: await this.count({ client, tableName, where, queryConfig }) };
     },
 
-    async count({ client, tableName, where, queryConfig }) {
+    async count({  tableName, where, queryConfig }) {
+      const client = await this.client;
       tableName = L.toDBField(tableName)
       return parseInt(
           (await client.query({

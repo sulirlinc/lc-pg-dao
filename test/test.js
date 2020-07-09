@@ -20,7 +20,7 @@ describe('pg数据库工具类', () => {
   it("2.创建表", (done) => {
     dao.createTable({
       isAutoCreateId: true,
-      idName : 'column_id',
+      idName: 'column_id',
       tableName: 't_u_column',
       isAutoCreateOperatorId: true,
       fields: [ {
@@ -57,6 +57,19 @@ describe('pg数据库工具类', () => {
       tableName: 't_u_column',
       unCheck: true,
       data: [ { key: '123' } ]
+    }).then((data) => {
+      console.log(data)
+      done()
+    }).catch(e => {
+      console.error(e)
+      done()
+    })
+  })
+  it("4.查询数据", (done) => {
+    dao.findByCode({
+      tableName: 't_config_url',
+      data: { code: 123 },
+      codeName: 'code'
     }).then((data) => {
       console.log(data)
       done()
