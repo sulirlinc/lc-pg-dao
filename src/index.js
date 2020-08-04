@@ -220,6 +220,25 @@ const dao = (({ c, config }) => {
       })).rowCount
     },
 
+    async insertItems({ tableName, items }) {
+      tableName = L.toDBField(tableName)
+      const client = await this.client()
+      let sql = ''
+      items.map(data => {
+        const { keys, queryConfig, argsIndex } = getByData(data)
+        if (sql === '') {
+          sql = `insert into ${ tableName } (${ keys }) values `
+        }
+        sql += `(`
+        queryConfig.map(value => sql += `${ value ? `'${ value }'` : value },`)
+        sql = `${ sql.substring(0, sql.length - 1) }),`
+      })
+      sql = `${ sql.substring(0, sql.length - 1) }`
+      return (await client.query({
+        sql, queryConfig: []
+      })).rowCount
+    },
+
     async insertData({ tableName, primaryKeys, data, unCheck }) {
       tableName = L.toDBField(tableName)
       if (!unCheck) {
