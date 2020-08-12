@@ -1,17 +1,18 @@
 const { L } = require("lc-js-common");
 const Pool = require('pg-pool')
+const ERROR_NAME = "lc.dao";
 const pg = (async (args = {}) => {
   try {
     const { config } = args
     const client = await new Pool(config).connect();
     return { client, pg }
   } catch (error) {
-    throw {
+    error[ERROR_NAME] = {
       code: "lc.pg.dao.database.connect.error",
-      message: '数据库连接失败。',
       info: { args },
-      error
+      message: '数据库连接失败。'
     }
+    throw error
   }
 })
 
@@ -19,11 +20,12 @@ const doCheckNull = ({ value, codeName, info }) => {
   if (value) {
     return value
   } else if (codeName) {
-    throw {
+    const error = new Error("未找到主键。")
+    error[ERROR_NAME] = {
       info,
-      code: codeName,
-      error: new Error("业务无效。")
+      code: codeName
     }
+    throw error
   }
 }
 
@@ -34,11 +36,12 @@ const checkPrimaryKeys = (primaryKeys) => {
     break
   }
   if (!isTrue) {
-    throw {
+    const error = new Error("未找到主键。")
+    error[ERROR_NAME] = {
       info: { primaryKeys },
-      code: "lc.pg.dao.not.found.primary.keys",
-      error: new Error("未找到主键。")
+      code: "lc.pg.dao.not.found.primary.keys"
     }
+    throw error
   }
   return primaryKeys
 }
@@ -91,21 +94,23 @@ const buildFields = ({ fields, primaryKey }) => {
     str = `${ str },`
   })
   if (L.isNullOrEmpty(str)) {
-    throw {
+    const error = new Error(`fields is null? ${ JSON.stringify(fields) }`)
+    error[ERROR_NAME] = {
       info: { fields, primaryKey },
-      code: "lc.pg.dao.build.fields.data.is.null",
-      error: new Error(`fields is null? ${ JSON.stringify(fields) }`)
+      code: "lc.pg.dao.build.fields.data.is.null"
     }
+    throw error
   }
   return `${ str }`
 }
 
-const dao = (({ c, config }) => {
+const dao = (({ c, config, isLittleHump = true  }) => {
   return {
     dClient: c,
     datasource: null,
     config,
     dao,
+    isLittleHump,
     release() {
       delete this.dClient
       delete this.datasource
@@ -134,12 +139,20 @@ const dao = (({ c, config }) => {
         sql = `${ sql })`
         return (await client.query({ sql }));
       } catch (error) {
-        throw {
-          info: { fields, tableName, primaryKey, uniqueKeys, isAutoCreateId, isAutoCreateOperatorId, createUpdateAt },
+        error[ERROR_NAME] = {
+          info: {
+            fields,
+            tableName,
+            primaryKey,
+            uniqueKeys,
+            isAutoCreateId,
+            isAutoCreateOperatorId,
+            createUpdateAt
+          },
           code: "lc.pg.dao.create.table.invalid.configuration",
-          message: `创建表出错${ sql }`,
-          error
+          message: `创建表出错${ sql }`
         }
+        throw error
       }
     },
 
@@ -212,11 +225,12 @@ const dao = (({ c, config }) => {
       checkPrimaryKeys(primaryKeys)
       const client = await this.client()
       if (!await this.count({ client, tableName, ...getByWhere(primaryKeys) })) {
-        throw {
+        const error = new Error("更新数据的条件不存在。")
+        error[ERROR_NAME] = {
           code: "lc.pg.dao.data.update.where.clause.not.found",
-          info: { tableName, primaryKeys, data },
-          error: new Error("更新数据的条件不存在。")
+          info: { tableName, primaryKeys, data }
         }
+        throw error
       }
       const sets = getBySet(data)
       const { where, queryConfig } = getByWhere(data, sets.queryConfig.length - 1)
@@ -252,11 +266,12 @@ const dao = (({ c, config }) => {
       }
       const client = await this.client()
       if (!unCheck && await this.count({ client, tableName, ...getByWhere(primaryKeys) }) > 0) {
-        throw {
+        const error = new Error("数据已存在")
+        error[ERROR_NAME] = {
           code: "lc.pg.dao.data.is.exists",
-          info: { tableName, primaryKeys, data, unCheck },
-          error: new Error("数据已存在")
+          info: { tableName, primaryKeys, data, unCheck }
         }
+        throw error
       }
       const { keys, queryConfig, argsIndex } = getByData(data)
       const sql = `insert into ${ tableName } (${ keys }) values (${ argsIndex })`
@@ -276,38 +291,36 @@ const dao = (({ c, config }) => {
     },
 
     async client() {
-      this.datasource =  this.datasource || (await pg({ config }))
-      this.dClient = this.dClient || this.datasource.client
-      if (!this.dClient.myOverviewQuery) {
-        this.dClient.myOverviewQuery = this.dClient.query
-        this.dClient.query = async ({ sql, queryConfig }) => {
+      const self = this
+      self.datasource =  self.datasource || (await pg({ config }))
+      self.dClient = self.dClient || self.datasource.client
+      if (!self.dClient.myOverviewQuery) {
+        self.dClient.myOverviewQuery = self.dClient.query
+        self.dClient.query = async ({ sql, queryConfig }) => {
           try {
-            const object = (await (this.dClient.myOverviewQuery(sql,
-                queryConfig).catch(e => {
-              if ("57P01" === e.code || L.isNullOrEmpty(e.code)) {
-                this.release()
-              }
-              throw e
-            })))
+            const object = (await (self.dClient.myOverviewQuery(sql, queryConfig)))
             return {
-              ...object, rows: object.rows.map((value) => {
+              ...object, rows: self.isLittleHump ? object.rows.map((value) => {
                 const data = {}
                 for (const key in value) {
                   data[L.toLittleHump(key)] = value[key]
                 }
                 return data
-              })
+              }) : object.rows
             }
           } catch (error) {
-            throw {
+            if ("57P01" === error.code || L.isNullOrEmpty(error.code)) {
+              self.release()
+            }
+            error[ERROR_NAME] = {
               info: { sql, queryConfig },
               code: "lc.pg.dao.execute.sql.error",
-              error
             }
+            throw error
           }
         }
       }
-      return this.dClient
+      return self.dClient
     },
     async createDataBase({ name }) {
       const client = await this.client()
