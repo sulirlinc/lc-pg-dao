@@ -8,7 +8,7 @@ const pg = (async (args = {}) => {
   } catch (error) {
     throw {
       code: "lc.pg.dao.database.connect.error",
-      message: '数据库链接失败。',
+      message: '数据库连接失败。',
       info: { args },
       error
     }
@@ -101,11 +101,15 @@ const buildFields = ({ fields, primaryKey }) => {
 }
 
 const dao = (({ c, config }) => {
-  let client = c
-  let datasource = null
   return {
+    dClient: c,
+    datasource: null,
     config,
     dao,
+    release() {
+      delete this.dClient
+      delete this.datasource
+    },
     async createTable({ fields = [], tableName, primaryKey, uniqueKeys = [], isAutoCreateId, isAutoCreateOperatorId, createUpdateAt, idName }) {
       tableName = L.toDBField(tableName)
       primaryKey = L.toDBField(primaryKey)
@@ -113,12 +117,14 @@ const dao = (({ c, config }) => {
       let sql = ``
       try {
         sql = `create table if not exists ${ tableName } ( ${ isAutoCreateId
-            ? ` ${idName || 'id'} bigserial not null ${ L.isNullOrEmpty(primaryKey)
+            ? ` ${ idName || 'id' } bigserial not null ${ L.isNullOrEmpty(
+                primaryKey)
                 ? `constraint ${ tableName }_pk_id primary key` : '' },` : '' }`
         let column = buildFields({ fields, primaryKey })
         sql = `${ sql } ${ column } ${ isAutoCreateOperatorId
             ? `operator_id bigint not null,`
-            : '' } create_at integer not null ${ createUpdateAt === false ? '' : ',update_at integer' }`
+            : '' } create_at integer not null ${ createUpdateAt === false ? ''
+            : ',update_at integer' }`
         uniqueKeys.map(value => {
           value = L.toDBField(value)
           sql = `${ sql } ${ !L.isNullOrEmpty(value)
@@ -270,13 +276,19 @@ const dao = (({ c, config }) => {
     },
 
     async client() {
-      datasource = datasource || (await pg({ config }))
-      client = client || datasource.client
-      if (!client.myOverviewQuery) {
-        client.myOverviewQuery = client.query
-        client.query = async ({ sql, queryConfig }) => {
+      this.datasource =  this.datasource || (await pg({ config }))
+      this.dClient = this.dClient || this.datasource.client
+      if (!this.dClient.myOverviewQuery) {
+        this.dClient.myOverviewQuery = this.dClient.query
+        this.dClient.query = async ({ sql, queryConfig }) => {
           try {
-            const object = (await client.myOverviewQuery(sql, queryConfig))
+            const object = (await (this.dClient.myOverviewQuery(sql,
+                queryConfig).catch(e => {
+              if ("57P01" === e.code || L.isNullOrEmpty(e.code)) {
+                this.release()
+              }
+              throw e
+            })))
             return {
               ...object, rows: object.rows.map((value) => {
                 const data = {}
@@ -295,7 +307,7 @@ const dao = (({ c, config }) => {
           }
         }
       }
-      return client
+      return this.dClient
     },
     async createDataBase({ name }) {
       const client = await this.client()
