@@ -81,7 +81,7 @@ const putAdd = (where, index) => {
   return index === 1 ? where : `${ where } and`
 }
 
-const buildFields = ({ fields, primaryKey }) => {
+const buildFields = ({ fields, primaryKey, tableName }) => {
   let str = ''
   fields.map(value => {
     let name = L.toDBField(value.name);
@@ -89,7 +89,7 @@ const buildFields = ({ fields, primaryKey }) => {
         || value.default === undefined) ? ''
         : ` default ${ value.default }` } ${ value.isNotNull ? 'not null' : '' }`
     if (primaryKey === name) {
-      str = `${ str } constraint table_name_pk primary key`
+      str = `${ str } constraint ${tableName}_pk_${primaryKey} primary key `
     }
     str = `${ str },`
   })
@@ -126,7 +126,7 @@ const dao = (({ c, config, isLittleHump = true  }) => {
             ? ` ${ idName || 'id' } bigserial not null ${ L.isNullOrEmpty(
                 primaryKey)
                 ? `constraint ${ tableName }_pk_id primary key` : '' },` : '' }`
-        let column = buildFields({ fields, primaryKey })
+        let column = buildFields({ fields, primaryKey, tableName })
         sql = `${ sql } ${ column } ${ isAutoCreateOperatorId
             ? `operator_id bigint not null,`
             : '' } create_at integer not null ${ createUpdateAt === false ? ''
