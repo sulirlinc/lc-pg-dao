@@ -118,6 +118,7 @@ const dao = (({ c, config, isLittleHump = true  }) => {
     async createTable({ fields = [], tableName, primaryKey, uniqueKeys = [], isAutoCreateId, isAutoCreateOperatorId, createUpdateAt, idName }) {
       tableName = L.toDBField(tableName)
       primaryKey = L.toDBField(primaryKey)
+      idName = L.toDBField(idName)
       const client = await this.client()
       let sql = ``
       try {

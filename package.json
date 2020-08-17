@@ -1,6 +1,6 @@
 {
   "name": "lc-pg-dao",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "description": "postgres操作工具类。",
   "author": "Linc",
   "main": "src/index.js",
