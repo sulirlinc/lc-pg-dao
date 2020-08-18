@@ -24,7 +24,7 @@ describe('pg数据库工具类', () => {
     dao.createTable({
       isAutoCreateId: true,
       idName: 'column_id',
-      tableName: 't_u_column',
+      tableName: 't_u_column66',
       isAutoCreateOperatorId: true,
       fields: [ {
         name: 'key',
@@ -34,8 +34,12 @@ describe('pg数据库工具类', () => {
         name: 'type',
         type: 'varchar',
         isNotNull: true
+      }, {
+        name: 'code',
+        type: 'varchar',
+        isNotNull: true
       }
-      ], uniqueKeys: [ 'code,key' ]
+      ], uniqueKeys: [ 'code', 'key' ]
     }).then((data) => {
       console.log(data)
       done()

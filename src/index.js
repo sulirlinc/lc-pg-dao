@@ -87,9 +87,10 @@ const buildFields = ({ fields, primaryKey, tableName }) => {
     let name = L.toDBField(value.name);
     str = `${ str } "${ name }" ${ value.type } ${ (value.default === null
         || value.default === undefined) ? ''
-        : ` default ${ value.default }` } ${ value.isNotNull ? 'not null' : '' }`
+        : ` default ${ value.default }` } ${ value.isNotNull ? 'not null'
+        : '' }`
     if (primaryKey === name) {
-      str = `${ str } constraint ${tableName}_pk_${primaryKey} primary key `
+      str = `${ str } constraint ${ tableName }_pk_${ primaryKey } primary key `
     }
     str = `${ str },`
   })
@@ -104,7 +105,7 @@ const buildFields = ({ fields, primaryKey, tableName }) => {
   return `${ str }`
 }
 
-const dao = (({ c, config, isLittleHump = true  }) => {
+const dao = (({ c, config, isLittleHump = true }) => {
   return {
     dClient: c,
     datasource: null,
@@ -131,12 +132,14 @@ const dao = (({ c, config, isLittleHump = true  }) => {
             ? `operator_id bigint not null,`
             : '' } create_at integer not null ${ createUpdateAt === false ? ''
             : ',update_at integer' }`
-        uniqueKeys.map(value => {
-          value = L.toDBField(value)
-          sql = `${ sql } ${ !L.isNullOrEmpty(value)
-              ? `,constraint ${ tableName }_pk_${ value.replace(
-                  /\,/g, '_') } unique (${ value })` : '' }`
-        });
+
+        if (uniqueKeys.length > 0) {
+          const mapUnique = uniqueKeys.map(
+              value => L.toDBField(value)).toString();
+          sql = `${sql}, constraint ${ tableName }_${ L.toReplace(
+              mapUnique, /[,]/g,
+              () => "_") }_pk unique (${ mapUnique })`
+        }
         sql = `${ sql })`
         return (await client.query({ sql }));
       } catch (error) {
@@ -158,7 +161,8 @@ const dao = (({ c, config, isLittleHump = true  }) => {
     },
 
     async findByPagination({ tableName, data }) {
-      const { startAt, endAt, limit = 10, offset = 0, ...conditions } = data || {}
+      const { startAt, endAt, limit = 10, offset = 0, ...conditions } = data
+      || {}
       const client = await this.client()
       tableName = L.toDBField(tableName)
       let { where, queryConfig } = getByWhere(conditions)
@@ -176,12 +180,16 @@ const dao = (({ c, config, isLittleHump = true  }) => {
       }
       const length = queryConfig.length;
       const rows = (await client.query({
-                sql: `select * from ${ tableName } ${ where } order by create_at desc LIMIT $${ length + 1 } OFFSET $${ length + 2 }`,
+                sql: `select * from ${ tableName } ${ where } order by create_at desc LIMIT $${ length
+                + 1 } OFFSET $${ length + 2 }`,
                 queryConfig: queryConfig.concat([ limit, offset ])
               }
           )
       ).rows;
-      return { rows, count: await this.count({ client, tableName, where, queryConfig }) };
+      return {
+        rows,
+        count: await this.count({ client, tableName, where, queryConfig })
+      };
     },
     async count({ client, tableName, where, data, queryConfig }) {
       client = client || await this.client();
@@ -207,7 +215,8 @@ const dao = (({ c, config, isLittleHump = true  }) => {
         sql, queryConfig
       }))
       const rows = object.rowCount > 0 ? object.rows : null;
-      return doCheckNull({ value: rows, errorCodeName, info: { tableName, data } });
+      return doCheckNull(
+          { value: rows, errorCodeName, info: { tableName, data } });
     },
 
     async findByCode({ tableName, data, errorCodeName }) {
@@ -218,14 +227,16 @@ const dao = (({ c, config, isLittleHump = true  }) => {
         sql, queryConfig
       }))
       const rows = object.rowCount > 0 ? object.rows : null;
-      return doCheckNull({ value: rows, errorCodeName, info: { tableName, data } });
+      return doCheckNull(
+          { value: rows, errorCodeName, info: { tableName, data } });
     },
 
     async update({ tableName, primaryKeys, data }) {
       tableName = L.toDBField(tableName)
       checkPrimaryKeys(primaryKeys)
       const client = await this.client()
-      if (!await this.count({ client, tableName, ...getByWhere(primaryKeys) })) {
+      if (!await this.count(
+          { client, tableName, ...getByWhere(primaryKeys) })) {
         const error = new Error("更新数据的条件不存在。")
         error[ERROR_NAME] = {
           code: "lc.pg.dao.data.update.where.clause.not.found",
@@ -234,7 +245,8 @@ const dao = (({ c, config, isLittleHump = true  }) => {
         throw error
       }
       const sets = getBySet(data)
-      const { where, queryConfig } = getByWhere(data, sets.queryConfig.length - 1)
+      const { where, queryConfig } = getByWhere(data,
+          sets.queryConfig.length - 1)
       const sql = `update ${ tableName } ${ sets.values } set ${ where })`
       return (await client.query({
         sql, queryConfig: sets.queryConfig.concat(queryConfig)
@@ -266,7 +278,8 @@ const dao = (({ c, config, isLittleHump = true  }) => {
         checkPrimaryKeys(primaryKeys)
       }
       const client = await this.client()
-      if (!unCheck && await this.count({ client, tableName, ...getByWhere(primaryKeys) }) > 0) {
+      if (!unCheck && await this.count(
+          { client, tableName, ...getByWhere(primaryKeys) }) > 0) {
         const error = new Error("数据已存在")
         error[ERROR_NAME] = {
           code: "lc.pg.dao.data.is.exists",
@@ -293,21 +306,22 @@ const dao = (({ c, config, isLittleHump = true  }) => {
 
     async client() {
       const self = this
-      self.datasource =  self.datasource || (await pg({ config }))
+      self.datasource = self.datasource || (await pg({ config }))
       self.dClient = self.dClient || self.datasource.client
       if (!self.dClient.myOverviewQuery) {
         self.dClient.myOverviewQuery = self.dClient.query
         self.dClient.query = async ({ sql, queryConfig }) => {
           try {
-            const object = (await (self.dClient.myOverviewQuery(sql, queryConfig)))
+            const object = (await (self.dClient.myOverviewQuery(sql,
+                queryConfig)))
             return {
-              ...object, rows: self.isLittleHump ? object.rows.map((value) => {
+              ...object, rows: self.isLittleHump ? (object.rows ? object.rows.map((value) => {
                 const data = {}
                 for (const key in value) {
                   data[L.toLittleHump(key)] = value[key]
                 }
                 return data
-              }) : object.rows
+              }) : object) : object.rows
             }
           } catch (error) {
             if ("57P01" === error.code || L.isNullOrEmpty(error.code)) {
