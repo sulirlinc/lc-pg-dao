@@ -16,14 +16,14 @@ const pg = (async (args = {}) => {
   }
 })
 
-const doCheckNull = ({ value, codeName, info }) => {
+const doCheckNull = ({ value, errorCodeName, info }) => {
   if (value) {
     return value
-  } else if (codeName) {
+  } else if (errorCodeName) {
     const error = new Error("未找到主键。")
     error[ERROR_NAME] = {
       info,
-      code: codeName
+      code: errorCodeName
     }
     throw error
   }
@@ -199,7 +199,7 @@ const dao = (({ c, config, isLittleHump = true  }) => {
       );
     },
 
-    async findByWhere({ tableName, data, codeName }) {
+    async findByWhere({ tableName, data, errorCodeName }) {
       tableName = L.toDBField(tableName)
       const { where, queryConfig } = getByWhere(data)
       const sql = `select * from ${ tableName } ${ where }`
@@ -207,10 +207,10 @@ const dao = (({ c, config, isLittleHump = true  }) => {
         sql, queryConfig
       }))
       const rows = object.rowCount > 0 ? object.rows : null;
-      return doCheckNull({ value: rows, codeName, info: { tableName, data } });
+      return doCheckNull({ value: rows, errorCodeName, info: { tableName, data } });
     },
 
-    async findByCode({ tableName, data, codeName }) {
+    async findByCode({ tableName, data, errorCodeName }) {
       tableName = L.toDBField(tableName)
       const { keys, queryConfig, argsIndex } = getByData(data)
       const sql = `select * from ${ tableName } where ${ keys }=${ argsIndex }`
@@ -218,7 +218,7 @@ const dao = (({ c, config, isLittleHump = true  }) => {
         sql, queryConfig
       }))
       const rows = object.rowCount > 0 ? object.rows : null;
-      return doCheckNull({ value: rows, codeName, info: { tableName, data } });
+      return doCheckNull({ value: rows, errorCodeName, info: { tableName, data } });
     },
 
     async update({ tableName, primaryKeys, data }) {
