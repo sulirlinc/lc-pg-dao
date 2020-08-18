@@ -12,7 +12,7 @@ const pg = (async (args = {}) => {
       info: { args },
       message: '数据库连接失败。'
     }
-    throw error
+    throw new Error(error)
   }
 })
 
@@ -156,7 +156,7 @@ const dao = (({ c, config, isLittleHump = true }) => {
           code: "lc.pg.dao.create.table.invalid.configuration",
           message: `创建表出错${ sql }`
         }
-        throw error
+        throw new Error(error)
       }
     },
 
@@ -331,7 +331,7 @@ const dao = (({ c, config, isLittleHump = true }) => {
               info: { sql, queryConfig },
               code: "lc.pg.dao.execute.sql.error",
             }
-            throw error
+            throw new Error(error)
           }
         }
       }
