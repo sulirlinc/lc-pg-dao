@@ -329,7 +329,7 @@ const dao = (({ c, config, isLittleHump = true }) => {
               info: { sql, queryConfig },
               code: "lc.pg.dao.execute.sql.error",
             }
-            throw error
+            throw new Error(error)
           }
         }
       }
