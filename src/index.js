@@ -278,8 +278,7 @@ const dao = (({ c, config, isLittleHump = true }) => {
         checkPrimaryKeys(primaryKeys)
       }
       const client = await this.client()
-      if (!unCheck && await this.count(
-          { client, tableName, ...getByWhere(primaryKeys) }) > 0) {
+      if (!unCheck && await this.count({ client, tableName, ...getByWhere(primaryKeys) }) > 0) {
         const error = new Error("数据已存在")
         error[ERROR_NAME] = {
           code: "lc.pg.dao.data.is.exists",
@@ -306,22 +305,21 @@ const dao = (({ c, config, isLittleHump = true }) => {
 
     async client() {
       const self = this
-      self.datasource = self.datasource || (await pg({ config }))
+      self.datasource =  self.datasource || (await pg({ config }))
       self.dClient = self.dClient || self.datasource.client
       if (!self.dClient.myOverviewQuery) {
         self.dClient.myOverviewQuery = self.dClient.query
         self.dClient.query = async ({ sql, queryConfig }) => {
           try {
-            const object = (await (self.dClient.myOverviewQuery(sql,
-                queryConfig)))
+            const object = (await (self.dClient.myOverviewQuery(sql, queryConfig)))
             return {
-              ...object, rows: self.isLittleHump ? (object.rows ? object.rows.map((value) => {
+              ...object, rows: self.isLittleHump ? object.rows.map((value) => {
                 const data = {}
                 for (const key in value) {
                   data[L.toLittleHump(key)] = value[key]
                 }
                 return data
-              }) : object) : object.rows
+              }) : object.rows
             }
           } catch (error) {
             if ("57P01" === error.code || L.isNullOrEmpty(error.code)) {
@@ -331,7 +329,7 @@ const dao = (({ c, config, isLittleHump = true }) => {
               info: { sql, queryConfig },
               code: "lc.pg.dao.execute.sql.error",
             }
-            throw new Error(error)
+            throw error
           }
         }
       }
