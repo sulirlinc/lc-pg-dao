@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="fruit">
+  <select id="showcase">
+    SELECT
+    *
+    FROM
+    t_showcase
+    <where>
+        <if test="dataTypes.length>0">
+          data_type in
+          <foreach collection="dataTypes" item="value" open="(" close=")" separator=",">
+            #{value}
+          </foreach>
+        </if>
+    </where>
+  </select>
+</mapper>

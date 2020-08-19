@@ -1,18 +1,21 @@
-const { L } = require("lc-js-common");
+const { L } = require("lc-js-common")
 const Pool = require('pg-pool')
-const ERROR_NAME = "lc.dao";
+const mybatisMapper = require('mybatis-mapper')
+const fs = require('fs')
+const p = require('path')
+const join = p.join
 const pg = (async (args = {}) => {
   try {
     const { config } = args
     const client = await new Pool(config).connect();
     return { client, pg }
   } catch (error) {
-    error[ERROR_NAME] = {
+    error.stack = `${ new Error(JSON.stringify({
       code: "lc.pg.dao.database.connect.error",
       info: { args },
       message: '数据库连接失败。'
-    }
-    throw new Error(error)
+    })).stack }\n${ error.stack }`
+    throw error
   }
 })
 
@@ -20,12 +23,10 @@ const doCheckNull = ({ value, errorCodeName, info }) => {
   if (value) {
     return value
   } else if (errorCodeName) {
-    const error = new Error("未找到主键。")
-    error[ERROR_NAME] = {
+    throw new Error(`未找到主键。\n ${ JSON.stringify({
       info,
       code: errorCodeName
-    }
-    throw error
+    }) }`)
   }
 }
 
@@ -36,12 +37,10 @@ const checkPrimaryKeys = (primaryKeys) => {
     break
   }
   if (!isTrue) {
-    const error = new Error("未找到主键。")
-    error[ERROR_NAME] = {
+    throw new Error(`未找到主键。\n ${ JSON.stringify({
       info: { primaryKeys },
       code: "lc.pg.dao.not.found.primary.keys"
-    }
-    throw error
+    }) }`)
   }
   return primaryKeys
 }
@@ -56,23 +55,26 @@ const getByData = (data) => {
   return { keys: keys.substr(1), queryConfig, argsIndex: argsIndex.substr(1) }
 }
 
-const getBySet = (data) => {
-  let values = "", queryConfig = [], index = 0
+const getBySet = (data, initIndex) => {
+  let values = "", queryConfig = [], index = initIndex || 0
   for (const key in data) {
     values += `,${ L.toDBField(key) }=$${ (++index) } `
     queryConfig.push(data[key])
   }
-  return { values: values.substr(1), queryConfig }
+  return { values: `set ${ values.substr(1) }`, queryConfig, index }
 }
 
 const getByWhere = (data, initIndex) => {
   let where = "", queryConfig = [], index = initIndex || 0
   for (const key in data) {
-    where += `and ${ L.toDBField(key) }=$${ (++index) } `
-    queryConfig.push(data[key])
+    const value = data[key]
+    if (!(typeof value == "undefined" || value == null)) {
+      where += `and ${ L.toDBField(key) }=$${ (++index) } `
+      queryConfig.push(value)
+    }
   }
   return {
-    where: where.length > 3 ? `where ${ where.substr(3) }` : '',
+    where: where.length > 3 ? `where ${ where.substr(3) }` : '', index,
     queryConfig
   }
 }
@@ -95,16 +97,35 @@ const buildFields = ({ fields, primaryKey, tableName }) => {
     str = `${ str },`
   })
   if (L.isNullOrEmpty(str)) {
-    const error = new Error(`fields is null? ${ JSON.stringify(fields) }`)
-    error[ERROR_NAME] = {
-      info: { fields, primaryKey },
-      code: "lc.pg.dao.build.fields.data.is.null"
-    }
-    throw error
+    throw new Error(
+        `fields is null? ${ JSON.stringify(fields) } \n ${ JSON.stringify({
+          info: { fields, primaryKey },
+          code: "lc.pg.dao.build.fields.data.is.null"
+        }) }`)
   }
   return `${ str }`
 }
 
+const findSync = (startPath) => {
+  let result = [];
+
+  function finder(path) {
+    fs.readdirSync(path).forEach((val, index) => {
+      let fPath = join(path, val);
+      let stats = fs.statSync(fPath);
+      if (stats.isDirectory()) {
+        result.push(fPath);
+        finder(fPath)
+      }
+      if (stats.isFile() && fPath.substring(fPath.length - 3) === 'xml') {
+        result.push(fPath);
+      }
+    });
+  }
+
+  finder(startPath);
+  return result;
+}
 const dao = (({ c, config, isLittleHump = true }) => {
   return {
     dClient: c,
@@ -136,31 +157,33 @@ const dao = (({ c, config, isLittleHump = true }) => {
         if (uniqueKeys.length > 0) {
           const mapUnique = uniqueKeys.map(
               value => L.toDBField(value)).toString();
-          sql = `${sql}, constraint ${ tableName }_${ L.toReplace(
+          sql = `${ sql }, constraint ${ tableName }_${ L.toReplace(
               mapUnique, /[,]/g,
               () => "_") }_pk unique (${ mapUnique })`
         }
         sql = `${ sql })`
         return (await client.query({ sql }));
       } catch (error) {
-        error[ERROR_NAME] = {
-          info: {
-            fields,
-            tableName,
-            primaryKey,
-            uniqueKeys,
-            isAutoCreateId,
-            isAutoCreateOperatorId,
-            createUpdateAt
-          },
-          code: "lc.pg.dao.create.table.invalid.configuration",
-          message: `创建表出错${ sql }`
-        }
-        throw new Error(error)
+        error.stack = `${ new Error(JSON.stringify(
+            {
+              info: {
+                fields,
+                tableName,
+                primaryKey,
+                uniqueKeys,
+                isAutoCreateId,
+                isAutoCreateOperatorId,
+                createUpdateAt
+              },
+              code: "lc.pg.dao.create.table.invalid.configuration",
+              message: `创建表出错${ sql }`
+            }
+        )).stack }\n${ error.stack }`
+        throw error
       }
     },
 
-    async findByPagination({ tableName, data }) {
+    async findByPagination({ tableName, columns = [ '*' ], data }) {
       const { startAt, endAt, limit = 10, offset = 0, ...conditions } = data
       || {}
       const client = await this.client()
@@ -180,7 +203,7 @@ const dao = (({ c, config, isLittleHump = true }) => {
       }
       const length = queryConfig.length;
       const rows = (await client.query({
-                sql: `select * from ${ tableName } ${ where } order by create_at desc LIMIT $${ length
+                sql: `${ columns.toString() } from ${ tableName } ${ where } order by create_at desc LIMIT $${ length
                 + 1 } OFFSET $${ length + 2 }`,
                 queryConfig: queryConfig.concat([ limit, offset ])
               }
@@ -207,10 +230,10 @@ const dao = (({ c, config, isLittleHump = true }) => {
       );
     },
 
-    async findByWhere({ tableName, data, errorCodeName }) {
+    async findByWhere({ tableName, columns = ['*'], data, errorCodeName }) {
       tableName = L.toDBField(tableName)
       const { where, queryConfig } = getByWhere(data)
-      const sql = `select * from ${ tableName } ${ where }`
+      const sql = `select ${ columns.toString() } from ${ tableName } ${ where }`
       const object = (await (await this.client()).query({
         sql, queryConfig
       }))
@@ -219,10 +242,10 @@ const dao = (({ c, config, isLittleHump = true }) => {
           { value: rows, errorCodeName, info: { tableName, data } });
     },
 
-    async findByCode({ tableName, data, errorCodeName }) {
+    async findByCode({ tableName, data, columns = ['*'], errorCodeName }) {
       tableName = L.toDBField(tableName)
       const { keys, queryConfig, argsIndex } = getByData(data)
-      const sql = `select * from ${ tableName } where ${ keys }=${ argsIndex }`
+      const sql = `select ${ columns.toString() } from ${ tableName } where ${ keys }=${ argsIndex }`
       const object = (await (await this.client()).query({
         sql, queryConfig
       }))
@@ -237,17 +260,17 @@ const dao = (({ c, config, isLittleHump = true }) => {
       const client = await this.client()
       if (!await this.count(
           { client, tableName, ...getByWhere(primaryKeys) })) {
-        const error = new Error("更新数据的条件不存在。")
-        error[ERROR_NAME] = {
+        throw new Error(`更新数据的条件不存在。\n ${ JSON.stringify({
           code: "lc.pg.dao.data.update.where.clause.not.found",
           info: { tableName, primaryKeys, data }
-        }
-        throw error
+        }) }`)
+      }
+      for (const primaryKey in primaryKeys) {
+        delete data[primaryKey]
       }
       const sets = getBySet(data)
-      const { where, queryConfig } = getByWhere(data,
-          sets.queryConfig.length - 1)
-      const sql = `update ${ tableName } ${ sets.values } set ${ where })`
+      const { where, queryConfig } = getByWhere(primaryKeys, sets.index)
+      const sql = `update ${ tableName } ${ sets.values } ${ where }`
       return (await client.query({
         sql, queryConfig: sets.queryConfig.concat(queryConfig)
       })).rowCount
@@ -272,19 +295,39 @@ const dao = (({ c, config, isLittleHump = true }) => {
       })).rowCount
     },
 
+    /**
+     * 存在更新，不存在插入
+     * @param tableName
+     * @param primaryKeys
+     * @param data
+     * @returns {Promise<*>}
+     */
+    async replaceData({ tableName, primaryKeys, data }) {
+      checkPrimaryKeys(primaryKeys)
+      tableName = L.toDBField(tableName)
+      const client = await this.client()
+      if (await this.count({ client, tableName, ...getByWhere(primaryKeys) })
+          > 0) {
+        return this.update({ tableName, primaryKeys, data })
+      }
+      const { keys, queryConfig, argsIndex } = getByData(data)
+      const sql = `insert into ${ tableName } (${ keys }) values (${ argsIndex })`
+      return (await (client).query({
+        sql, queryConfig
+      })).rowCount
+    },
     async insertData({ tableName, primaryKeys, data, unCheck }) {
       tableName = L.toDBField(tableName)
       if (!unCheck) {
         checkPrimaryKeys(primaryKeys)
       }
       const client = await this.client()
-      if (!unCheck && await this.count({ client, tableName, ...getByWhere(primaryKeys) }) > 0) {
-        const error = new Error("数据已存在")
-        error[ERROR_NAME] = {
+      if (!unCheck && await this.count(
+          { client, tableName, ...getByWhere(primaryKeys) }) > 0) {
+        throw new Error(`数据已存在。\n ${ JSON.stringify({
           code: "lc.pg.dao.data.is.exists",
           info: { tableName, primaryKeys, data, unCheck }
-        }
-        throw error
+        }) }`)
       }
       const { keys, queryConfig, argsIndex } = getByData(data)
       const sql = `insert into ${ tableName } (${ keys }) values (${ argsIndex })`
@@ -302,16 +345,30 @@ const dao = (({ c, config, isLittleHump = true }) => {
         sql: `delete from ${ tableName } ${ where }`, queryConfig
       })).rowCount
     },
-
+    mapper({ xmlFilePaths }) {
+      const self = this
+      mybatisMapper.createMapper(findSync(xmlFilePaths));
+      const format = { language: 'sql', indent: '  ' };
+      return {
+        async query(namespace, selectId, param) {
+          const client = await self.client()
+          const sql = mybatisMapper.getStatement(namespace, selectId, param,
+              format);
+          return (await client.query({ sql })
+          ).rows;
+        }
+      }
+    },
     async client() {
       const self = this
-      self.datasource =  self.datasource || (await pg({ config }))
+      self.datasource = self.datasource || (await pg({ config }))
       self.dClient = self.dClient || self.datasource.client
       if (!self.dClient.myOverviewQuery) {
         self.dClient.myOverviewQuery = self.dClient.query
         self.dClient.query = async ({ sql, queryConfig }) => {
           try {
-            const object = (await (self.dClient.myOverviewQuery(sql, queryConfig)))
+            const object = (await (self.dClient.myOverviewQuery(sql,
+                queryConfig)))
             return {
               ...object, rows: self.isLittleHump ? object.rows.map((value) => {
                 const data = {}
@@ -325,11 +382,11 @@ const dao = (({ c, config, isLittleHump = true }) => {
             if ("57P01" === error.code || L.isNullOrEmpty(error.code)) {
               self.release()
             }
-            error[ERROR_NAME] = {
+            error.stack = `${ new Error(JSON.stringify({
               info: { sql, queryConfig },
               code: "lc.pg.dao.execute.sql.error",
-            }
-            throw new Error(error)
+            })).stack }\n${ error.stack }`
+            throw error
           }
         }
       }

@@ -97,57 +97,12 @@ describe('pg数据库工具类', () => {
     })
     //根据Code 查询
   })
-  it("5.批量插入", (done) => {
-    console.log(
-        [ "c:\\video2\\wyd-100\\wyd01.jpg", "c:\\video2\\wf-99\\wf01.jpg",
-          "c:\\video2\\wf-132\\wf02.jpg" ].toString())
-
-    dao.findByWhere({ tableName: "t_config_url", path: "c:\\" }).then(
-        ({ value }) => {
-          const { code, path, detailsMd5 } = value
-          // 这里调用 getResult(path) 获取到 [{ full_path,create_at  }]
-          const files = [
-            {
-              full_path: "c:\\video2\\wyd-100\\wyd01.jpg",
-              create_at: 1594895327,
-              md5: '123xxxx'
-            },
-            {
-              file_path: "c:\\video2\\wf-99\\wf01.jpg",
-              create_at: 1594895327,
-              md5: '1234xxx'
-            },
-            {
-              file_path: "c:\\video2\\wf-132\\wf02.jpg",
-              create_at: 1594895327,
-              md5: '12345xx'
-            }
-          ]
-          //将获取到的上面的数据进行MD5
-          const sign = md5(files.map(value => value.md5).toString())
-          if (detailsMd5 === sign) {
-            //这里表示文件夹中的所有内容和数据库中的文件是一致的，
-            return
-          }
-          //  这里的代码，表示数据库中的MD5值和python返回的不一样
-
-          /**
-           * 假如这些是python返回的结果，你处理之后的明细表
-           * { code: "84173D250EA1E4FD010FB6BF4596D0E6", name: "闻一多", frame: '100',
-           *           videoSource: 'video2',
-           *           filePath: "c:\\video2\\wyd-100\\wyd01.jpg",
-           *           createAt: 1594895327
-           * },
-           */
-          const items = getFormatData({ files, code })
-          dao.deleteData({ tableName: "t_history", primaryKeys: { code } }) // 删除之前保存的数据。
-          dao.insertItems({ tableName: "t_history", items })
-          dao.update({
-            tableName: "t_config_url",
-            primaryKeys: { code },
-            detailsMd5: sign
-          }); // 最后：把python返回的上面的sign,更新到数据库的detailsMd5值。
-        })
+  it("5.更新", (done) => {
+    dao.update({
+      tableName: "tHistory",
+      primaryKeys: { code: "1" },
+      data: { name: "123", path: "111", code: "1" }
+    })
   })
   it("6.批量插入", (done) => {
 
@@ -205,4 +160,11 @@ describe('pg数据库工具类', () => {
       }
     })
   })
+  it('should mapping', function () {
+    dao.mapper({ xmlFilePaths: require('path').join(__dirname, '../test/mybatis') }).query("fruit", "showcase", {
+      dataTypes: [ 2 ]
+    }).then(data => {
+      console.log(data)
+    })
+  });
 })
