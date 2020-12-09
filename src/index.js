@@ -183,7 +183,7 @@ const dao = (({ c, config, isLittleHump = true }) => {
       }
     },
 
-    async findByPagination({ tableName, columns = [ '*' ], data }) {
+    async findByPagination({ tableName, columns = [ '*' ], data, orderBy }) {
       const { startAt, endAt, limit = 10, offset = 0, ...conditions } = data
       || {}
       const client = await this.client()
@@ -203,7 +203,9 @@ const dao = (({ c, config, isLittleHump = true }) => {
       }
       const length = queryConfig.length;
       const rows = (await client.query({
-                sql: `${ columns.toString() } from ${ tableName } ${ where } order by create_at desc LIMIT $${ length
+                sql: `select ${ columns.map(value => L.toDBField(value)).toString() } from ${ tableName } ${ where }
+                order by ${ orderBy ? orderBy : 'create_at desc ' }
+                LIMIT $${ length
                 + 1 } OFFSET $${ length + 2 }`,
                 queryConfig: queryConfig.concat([ limit, offset ])
               }
@@ -230,10 +232,11 @@ const dao = (({ c, config, isLittleHump = true }) => {
       );
     },
 
-    async findByWhere({ tableName, columns = ['*'], data, errorCodeName }) {
+    async findByWhere({ tableName, columns = ['*'], data, errorCodeName, orderBy }) {
       tableName = L.toDBField(tableName)
       const { where, queryConfig } = getByWhere(data)
-      const sql = `select ${ columns.toString() } from ${ tableName } ${ where }`
+      const sql = `select ${ columns.map(value => L.toDBField(value)).toString() } from ${ tableName } ${ where } 
+                ${ orderBy ? ` order by ${orderBy}` : '' }`
       const object = (await (await this.client()).query({
         sql, queryConfig
       }))
@@ -242,10 +245,10 @@ const dao = (({ c, config, isLittleHump = true }) => {
           { value: rows, errorCodeName, info: { tableName, data } });
     },
 
-    async findByCode({ tableName, data, columns = ['*'], errorCodeName }) {
+    async findByCode({ tableName, data, columns = ['*'], errorCodeName, orderBy }) {
       tableName = L.toDBField(tableName)
       const { keys, queryConfig, argsIndex } = getByData(data)
-      const sql = `select ${ columns.toString() } from ${ tableName } where ${ keys }=${ argsIndex }`
+      const sql = `select ${ columns.map(value => L.toDBField(value)).toString() } from ${ tableName } where ${ keys }=${ argsIndex } ${ orderBy ? ` order by ${orderBy}` : '' } `
       const object = (await (await this.client()).query({
         sql, queryConfig
       }))
@@ -264,9 +267,6 @@ const dao = (({ c, config, isLittleHump = true }) => {
           code: "lc.pg.dao.data.update.where.clause.not.found",
           info: { tableName, primaryKeys, data }
         }) }`)
-      }
-      for (const primaryKey in primaryKeys) {
-        delete data[primaryKey]
       }
       const sets = getBySet(data)
       const { where, queryConfig } = getByWhere(primaryKeys, sets.index)
